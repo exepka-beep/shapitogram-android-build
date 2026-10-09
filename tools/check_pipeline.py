@@ -267,12 +267,22 @@ def check_workflow(brand: dict) -> None:
         ("Fetch the server RSA public key", "иначе клиент не пройдёт рукопожатие"),
         ("Install the signing keystore", "без ключа нет подписи"),
         ("Rebrand to ShapitoGram", "имя пакета, строки, адрес сервера"),
+        ("Pull the base image", "Docker Hub отдаёт 429 анонимным клиентам — нужен фолбэк на зеркало"),
+        ("Build the builder image", "без образа с SDK и NDK сборки нет"),
         ("Verify the APK structure and signature", "проверка подписи и пакета"),
         ("Scan the APK for XTree Gram leftovers", "проверка содержимого APK"),
         ("Upload the APK", "результат должен быть скачиваемым"),
     ):
         if not any(needle.lower() in name.lower() for name in step_names):
             fail("workflow: нет шага %r (%s)" % (needle, why))
+
+    # Зеркало базового образа: без него сборка падает на `429 Too Many Requests`
+    # от registry-1.docker.io, и это уже случалось.
+    if "public.ecr.aws/docker/library/gradle" not in text:
+        fail("workflow: базовый образ не тянется с зеркала — Docker Hub отдаст 429")
+    if 'sed -i "1s|^FROM ' not in text:
+        fail("workflow: строка FROM в Dockerfile не переписывается на зеркало — "
+             "docker build пойдёт в Docker Hub за тем же 429")
 
     # Ссылки на файлы конвейера, которые workflow реально запускает.
     for rel in re.findall(r"scripts/[\w.]+\.(?:py|sh)", text):

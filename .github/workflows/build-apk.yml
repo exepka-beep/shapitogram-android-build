@@ -234,6 +234,46 @@ jobs:
           python3 scripts/set_api_credentials.py \
             "$BUILD_DIR/TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"
 
+      - name: Pull the base image
+        run: |
+          set -euxo pipefail
+          # Docker Hub отдаёт анонимным клиентам 429 Too Many Requests, а IP
+          # раннеров GitHub общие: первый прогон упал именно на этом —
+          #   `unexpected status from HEAD request to registry-1.docker.io/v2/
+          #    library/gradle/manifests/8.11.1-jdk17: 429 Too Many Requests`.
+          # Поэтому базовый образ тянем с зеркала.
+          #
+          # public.ecr.aws/docker/library/* — официальное зеркало образов Docker
+          # Hub от AWS, без анонимных лимитов (проверено: манифест отдаёт 200 с
+          # application/vnd.oci.image.index.v1+json). Docker Hub оставлен вторым:
+          # если у него лимит отпустит, он тоже подойдёт.
+          MIRRORS=(
+            "public.ecr.aws/docker/library/gradle:8.11.1-jdk17"
+            "docker.io/library/gradle:8.11.1-jdk17"
+          )
+          BASE_IMAGE=""
+          for candidate in "${MIRRORS[@]}"; do
+            for attempt in 1 2 3; do
+              if docker pull "$candidate"; then BASE_IMAGE="$candidate"; break 2; fi
+              echo "не вышло: $candidate (попытка $attempt)"
+              sleep $((attempt * 15))
+            done
+          done
+          if [[ -z "$BASE_IMAGE" ]]; then
+            echo "не смог скачать базовый образ ни с одного зеркала" >&2
+            exit 1
+          fi
+          echo "базовый образ: $BASE_IMAGE"
+
+          # Dockerfile начинается с `FROM gradle:8.11.1-jdk17` — это имя живёт в
+          # Docker Hub, и docker build пошёл бы ровно туда же, за тем же 429.
+          # Переписываем единственную строку FROM на зеркало, с которого образ
+          # реально скачался: тогда build вообще не обращается к реестру.
+          # Правка минимальная, и она печатается в лог.
+          sed -i "1s|^FROM .*|FROM ${BASE_IMAGE}|" "$BUILD_DIR/Dockerfile"
+          echo "--- первая строка Dockerfile после правки ---"
+          head -1 "$BUILD_DIR/Dockerfile"
+
       - name: Build the builder image
         run: |
           set -euxo pipefail
@@ -242,7 +282,8 @@ jobs:
           # Слои не кэшируем: образ ~10 ГБ, в лимит кэша GitHub Actions (10 ГБ на
           # репозиторий) он не влезает вместе с кэшем исходников, а установка SDK
           # занимает минуты, тогда как сборка — десятки минут.
-          docker build -t "$DOCKER_IMAGE" -f "$BUILD_DIR/Dockerfile" "$BUILD_DIR"
+          # --pull=false: базовый образ уже локальный (см. шаг выше), в реестр не ходим.
+          docker build --pull=false -t "$DOCKER_IMAGE" -f "$BUILD_DIR/Dockerfile" "$BUILD_DIR"
           docker image inspect "$DOCKER_IMAGE" --format 'образ: {{.Id}} ({{.Size}} байт)'
 
       - name: Build the APK
