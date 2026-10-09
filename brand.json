@@ -1,0 +1,86 @@
+{
+  "_comment": "Единый конфиг бренда ShapitoGram. Все скрипты ребрендинга читают этот файл. Меняешь бренд здесь — меняется везде.",
+
+  "product": {
+    "name": "ShapitoGram",
+    "short_name": "ShapitoGram",
+    "username_prefix": "shapito",
+    "app_scheme": "shapitogram",
+    "premium_name": "ShapitoGram Premium",
+    "stars_name": "ShapitoGram Stars",
+    "org_name": "ShapitoGram"
+  },
+
+  "replace": {
+    "_comment": "Правила замены строк в текстовых ресурсах клиентов. Порядок важен: длинные раньше коротких.",
+    "_android_overlay": "Android-конвейер накладывает overlay XTree Gram, поэтому в текстовых ресурсах уже стоит 'Xtreegram' вместо 'Telegram'. Поэтому правил две группы: сначала снимаем следы XTree Gram, потом добираем то, что XTree Gram сам не тронул. В Java применяется только группа XTree Gram — правило 'Telegram' там опасно (идентификаторы, t.me-ссылки, telegram.org).",
+    "rules": [
+      { "from": "XTree Gram", "to": "ShapitoGram", "skip_after": [], "skip_before": [] },
+      { "from": "Xtreegram", "to": "ShapitoGram", "skip_after": [], "skip_before": [] },
+      { "from": "XTREEGRAM", "to": "SHAPITOGRAM", "skip_after": [], "skip_before": [] },
+      { "from": "Telegram", "to": "ShapitoGram", "skip_after": [".org", ".ORG"], "skip_before": ["/"] },
+      { "from": "TELEGRAM", "to": "SHAPITOGRAM", "skip_after": [".ORG"], "skip_before": ["/"] }
+    ]
+  },
+
+  "android": {
+    "_keystore_password_comment": "Пароля здесь НЕТ намеренно. Этот файл уезжает в публичный репозиторий сборки, а пароль ключа подписи — секрет. Он приходит на шаге ребрендинга: --keystore-password, переменная окружения ANDROID_KEYSTORE_PASSWORD или секрет GitHub ANDROID_KEYSTORE_PASSWORD. Локально пароль лежит в ../artifacts/KEYSTORE_INFO.txt.",
+    "app_name": "ShapitoGram",
+    "app_name_beta": "ShapitoGram Beta",
+    "package": "com.shapitogram.messenger",
+    "namespace": "org.telegram.messenger.regular",
+    "flavor": "afat",
+    "keystore_file": "release.keystore",
+    "keystore_alias": "shapitogramkey",
+    "keystore_type": "PKCS12",
+    "keystore_keyalg": "RSA",
+    "keystore_keysize": 4096,
+    "keystore_validity_days": 10950,
+    "keystore_cert_sha256": "4A:AB:1A:40:0F:1E:AB:E5:4D:B1:AB:B1:41:BD:9F:C0:7D:68:1F:EC:54:71:5E:1B:1D:D5:16:B1:8F:DE:F3:6B"
+  },
+
+  "ios": {
+    "app_name": "ShapitoGram",
+    "bundle_id": "com.shapitogram.messenger"
+  },
+
+  "desktop": {
+    "app_name": "ShapitoGram Desktop",
+    "short_app_name": "ShapitoGram",
+    "application_name": "ShapitoGramDesktop",
+    "company_name": "ShapitoGram",
+    "bundle_id": "com.shapitogram.desktop",
+    "linux_app_id": "com.shapitogram.desktop"
+  },
+
+  "pc_client": {
+    "_comment": "ПК-версия делается как в XTree Gram: берётся ГОТОВЫЙ билд OwpenGram Desktop с GitHub-релизов (owpengram/owpengram-desktop-client), сборка НЕ нужна. Клиент подключается к серверу через Add server (host:port) и сам подтягивает RSA-ключ и имя с /owpengram/server-info.",
+    "distribution": "prebuilt",
+    "source_releases": "https://github.com/owpengram/owpengram-desktop-client/releases",
+    "exe_name": "ShapitoGram.exe",
+    "server_name": "ShapitoGram",
+    "server_description": "Self-hosted ShapitoGram server.",
+    "server_icon_env": "TELESRV_OWPENGRAM_SERVER_ICON"
+  },
+
+  "server": {
+    "_comment": "PLACEHOLDER-значения заполняются, когда появятся домен и сервер.",
+    "domain": "PLACEHOLDER_DOMAIN",
+    "base_url": "https://PLACEHOLDER_DOMAIN",
+    "web_base_url": "https://PLACEHOLDER_DOMAIN",
+    "advertise_ip": "PLACEHOLDER_IP",
+    "public_listen_host": "127.0.0.1",
+    "server_port": 2398,
+    "dc_id": 2,
+    "default_country_code": "CN",
+    "websocket_allowed_origins": "https://PLACEHOLDER_DOMAIN,https://www.PLACEHOLDER_DOMAIN",
+    "image_prefix": "ghcr.io/iamxvbaba/gramsrv",
+    "image_tag": "main"
+  },
+
+  "telegram_bot": {
+    "_comment": "Бот в настоящем Telegram для релея OTP и магазина. Токен вписать после создания у @BotFather.",
+    "username": "PLACEHOLDER_BOT_USERNAME",
+    "token": "PLACEHOLDER_BOT_TOKEN"
+  }
+}
