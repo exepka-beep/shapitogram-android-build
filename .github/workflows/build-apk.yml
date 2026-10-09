@@ -47,9 +47,10 @@ jobs:
       # Приватный клон (кэшируется) и рабочая копия, в которую накладывается
       # overlay. Разделены намеренно: кэш обязан оставаться чистым, иначе
       # ребрендинг предыдущего прогона переживёт следующий.
-      SOURCE_DIR: ${{ runner.temp }}/src
-      BUILD_DIR: ${{ runner.temp }}/build
-      GRADLE_HOME: ${{ runner.temp }}/gradle-home
+      #
+      # Сами пути задаются первым шагом через $GITHUB_ENV, а не здесь: контекст
+      # `runner` в env на уровне job недоступен, и workflow с ним не разбирается
+      # вовсе (`Unrecognized named-value: 'runner'` на этапе dispatch).
 
       # Наш сервер.
       CUSTOM_HOST: shapitogram.xyz
@@ -76,6 +77,17 @@ jobs:
       - name: Checkout this repository
         uses: actions/checkout@v4
 
+      - name: Set up paths
+        run: |
+          set -euxo pipefail
+          # Три каталога на раннере, а не в репозитории. Пишем их в $GITHUB_ENV,
+          # потому что ${{ runner.temp }} в env на уровне job GitHub не принимает.
+          echo "SOURCE_DIR=$RUNNER_TEMP/src" >> "$GITHUB_ENV"
+          echo "BUILD_DIR=$RUNNER_TEMP/build" >> "$GITHUB_ENV"
+          echo "GRADLE_HOME=$RUNNER_TEMP/gradle-home" >> "$GITHUB_ENV"
+          echo "раннер: $(nproc) ядер, $(free -g | awk '/^Mem:/{print $2}') ГБ RAM"
+          df -h / | tail -1
+
       - name: Free disk space
         run: |
           set -euxo pipefail
@@ -96,7 +108,9 @@ jobs:
       - name: Restore the source tree cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.SOURCE_DIR }}
+          # Здесь ${{ runner.temp }} допустим: контекст `runner` доступен в `with`
+          # шага, в отличие от env на уровне job.
+          path: ${{ runner.temp }}/src
           # Ключ по ref, а не по github.sha: каждый прогон клонирует один и тот
           # же коммит, поэтому пер-коммитный ключ не восстановился бы никогда.
           key: android-src-${{ runner.os }}-${{ env.UPSTREAM_REF }}-v1

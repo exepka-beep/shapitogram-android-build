@@ -238,6 +238,24 @@ def check_workflow(brand: dict) -> None:
     if env.get("UPSTREAM_REF") and not re.fullmatch(r"[0-9a-f]{40}", str(env["UPSTREAM_REF"])):
         fail("workflow: UPSTREAM_REF=%r не похож на полный SHA коммита" % env["UPSTREAM_REF"])
 
+    # Контексты, недоступные в env на уровне job. Ошибка тут не в раннере, а на
+    # этапе dispatch: GitHub отвечает 422 "failed to parse workflow" и сборка
+    # не запускается вообще, так что локальная проверка экономит целый круг.
+    allowed_in_job_env = ("github.", "env.", "vars.", "secrets.", "inputs.")
+    for key, value in env.items():
+        for expression in re.findall(r"\$\{\{\s*([^}]+?)\s*\}\}", str(value)):
+            head = expression.split(".")[0] + "."
+            if head not in allowed_in_job_env:
+                fail("workflow: в env job'а %s использует ${{ %s }} — контекст %r "
+                     "там недоступен, GitHub не разберёт workflow (HTTP 422)"
+                     % (key, expression, expression.split(".")[0]))
+
+    # Пути, которые задаются первым шагом через $GITHUB_ENV: если шаг пропадёт
+    # или переменная переименуется, все остальные шаги получат пустые строки.
+    for var in ("SOURCE_DIR", "BUILD_DIR", "GRADLE_HOME"):
+        if 'echo "%s=' % var not in text or '>> "$GITHUB_ENV"' not in text:
+            fail("workflow: %s не задаётся через $GITHUB_ENV" % var)
+
     # Шаги: набор обязательных имён. Проверяем имена, а не номера, чтобы порядок
     # можно было менять, не ломая проверку.
     step_names = [s.get("name", "") for s in (job.get("steps") or [])]
