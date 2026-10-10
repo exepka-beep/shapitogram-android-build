@@ -91,11 +91,24 @@ jobs:
       - name: Free disk space
         run: |
           set -euxo pipefail
-          echo "--- до ---"
+          # Сколько места нужно: образ ~10 ГБ + gradle и NDK ещё ~10 ГБ.
+          #
+          # Шаг условный, и это не перестраховка в обе стороны. На нынешнем
+          # ubuntu-latest под `/` 145 ГБ, из них 86 ГБ свободны сразу — удаление
+          # 12 ГБ предустановленного Android SDK ничего не решает, но стоит
+          # ~6 минут: это 700 тысяч мелких файлов, и `rm -rf` по ним идёт дольше
+          # самой сборки на этом этапе. При этом раннеры бывают и теснее, поэтому
+          # при нехватке места чистка всё-таки выполняется.
+          AVAIL_GB=$(( $(df --output=avail -k / | tail -1) / 1024 / 1024 ))
+          echo "свободно на /: ${AVAIL_GB} ГБ"
           df -h /
-          # Образ сборки весит ~10 ГБ, ещё ~10 ГБ нужно gradle и NDK. На
-          # ubuntu-latest места из коробки не хватает, а из предустановленного
-          # здесь не нужно почти ничего: свой Android SDK мы ставим внутрь образа.
+          if (( AVAIL_GB >= 40 )); then
+            echo "места достаточно — ничего не удаляю"
+            exit 0
+          fi
+          echo "меньше 40 ГБ — освобождаю"
+          # Из предустановленного здесь не нужно почти ничего: свой Android SDK
+          # мы ставим внутрь образа, Java и Android-инструменты не используются.
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /usr/local/share/boost || true
@@ -116,6 +129,18 @@ jobs:
           key: android-src-${{ runner.os }}-${{ env.UPSTREAM_REF }}-v1
           restore-keys: |
             android-src-${{ runner.os }}-${{ env.UPSTREAM_REF }}-
+
+      - name: Restore the Gradle cache
+        uses: actions/cache@v4
+        with:
+          # Раннер каждый раз новый, поэтому GRADLE_USER_HOME без кэша живёт
+          # ровно один прогон. Кэшируем: зависимости Telegram Android — это
+          # ~1 ГБ загрузок, которые иначе качаются заново на каждой сборке.
+          path: ${{ runner.temp }}/gradle-home
+          key: android-gradle-${{ runner.os }}-${{ env.UPSTREAM_REF }}-v1
+          restore-keys: |
+            android-gradle-${{ runner.os }}-${{ env.UPSTREAM_REF }}-
+            android-gradle-${{ runner.os }}-
 
       - name: Clone upstream
         run: |
@@ -323,8 +348,10 @@ jobs:
           APK_PATH: ${{ steps.apk.outputs.path }}
         run: |
           set -euxo pipefail
-          # Путь внутри контейнера: $BUILD_DIR смонтирован в /work.
-          APK_REL="${APK_PATH#$BUILD_DIR}"
+          # $BUILD_DIR смонтирован в /work, поэтому путь на раннере надо перевести
+          # в контейнерный: /home/runner/work/_temp/build/... -> /work/...
+          # (просто отрезать префикс нельзя — получится /TMessagesProj_App/...).
+          APK_IN_CONTAINER="/work${APK_PATH#$BUILD_DIR}"
           # Скрипт берём из этого репозитория (смонтирован в /pipeline), а не из
           # клона: в клоне лежит СВОЙ scripts/ от upstream, и он нам не нужен.
           # aapt2 и apksigner — внутри образа, из того же SDK, которым собирали.
@@ -333,7 +360,7 @@ jobs:
             -v "$GITHUB_WORKSPACE":/pipeline:ro \
             "$DOCKER_IMAGE" \
             bash -c 'bash /pipeline/scripts/verify_apk.sh "$@"' _ \
-              "$APK_REL" "$APP_PACKAGE" "$EXPECTED_VERSION_CODE" "$APP_VERSION_NAME" "$EXPECTED_CERT_SHA256"
+              "$APK_IN_CONTAINER" "$APP_PACKAGE" "$EXPECTED_VERSION_CODE" "$APP_VERSION_NAME" "$EXPECTED_CERT_SHA256"
 
       - name: Scan the APK for XTree Gram leftovers
         env:
@@ -353,6 +380,11 @@ jobs:
             --json "$RUNNER_TEMP/apk-branding-report.json"
 
       - name: Collect artifacts
+        # `always()`: APK — это результат сборки, а проверки выше — диагностика.
+        # Ошибка в проверке (как в прогоне #4, где путь внутри контейнера был без
+        # /work) не должна уничтожать сорок минут работы. Прогон всё равно
+        # красный, поэтому спутать проверенный APK с непроверенным нельзя.
+        if: always()
         env:
           APK_PATH: ${{ steps.apk.outputs.path }}
           APK_NAME: ${{ steps.apk.outputs.name }}
@@ -360,8 +392,17 @@ jobs:
           set -euxo pipefail
           OUT="$RUNNER_TEMP/artifacts"
           mkdir -p "$OUT"
+          if [[ -z "$APK_PATH" || ! -f "$APK_PATH" ]]; then
+            echo "APK не найден — собирать нечего" >&2
+            exit 1
+          fi
           cp "$APK_PATH" "$OUT/$APK_NAME"
-          cp "$RUNNER_TEMP/apk-branding-report.json" "$OUT/"
+          # Отчёт сканера есть, только если сам сканер дошёл до конца.
+          if [[ -f "$RUNNER_TEMP/apk-branding-report.json" ]]; then
+            cp "$RUNNER_TEMP/apk-branding-report.json" "$OUT/"
+          else
+            echo "note: отчёта сканера нет — проверка содержимого не дошла до конца" >&2
+          fi
           # mapping.txt — имена классов и методов после R8. Без него стектрейс из
           # релизной сборки не читается вообще: все классы называются a.b.c.
           # Best effort: его отсутствие не должно валить прогон, APK уже готов.
@@ -376,6 +417,9 @@ jobs:
           sha256sum "$OUT"/*.apk | tee "$OUT/SHA256SUMS.txt"
 
       - name: Upload the APK
+        # Тоже `always()` — по той же причине: результат нужен даже при красной
+        # проверке, иначе отлаживать нечего.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ShapitoGram-APK-${{ env.APP_VERSION_NAME }}-build${{ github.run_number }}

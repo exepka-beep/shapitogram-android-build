@@ -276,6 +276,20 @@ def check_workflow(brand: dict) -> None:
         if not any(needle.lower() in name.lower() for name in step_names):
             fail("workflow: нет шага %r (%s)" % (needle, why))
 
+    # Путь к APK внутри контейнера. $BUILD_DIR монтируется в /work, поэтому
+    # одного отрезания префикса мало: получится /TMessagesProj_App/... и шаг
+    # упадёт на «нет файла». Уже случалось в прогоне #4.
+    verify_steps = [s for s in (job.get("steps") or [])
+                    if "verify_apk.sh" in json.dumps(s, ensure_ascii=False)]
+    if not verify_steps:
+        fail("workflow: ни один шаг не запускает scripts/verify_apk.sh")
+    for step in verify_steps:
+        body = json.dumps(step, ensure_ascii=False)
+        if "/work${" not in body and "/work$" not in body:
+            fail("workflow: шаг %r передаёт путь к APK без префикса /work — "
+                 "внутри контейнера такой файл не найдётся (смонтировано в /work)"
+                 % step.get("name", "?"))
+
     # Зеркало базового образа: без него сборка падает на `429 Too Many Requests`
     # от registry-1.docker.io, и это уже случалось.
     if "public.ecr.aws/docker/library/gradle" not in text:
