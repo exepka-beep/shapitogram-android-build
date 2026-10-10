@@ -27,12 +27,18 @@ APK — это zip, содержимое не сжато «в никуда»: с
 
 Использование
 -------------
-    scan_apk.py app.apk --absent Xtreegram --present shapitogram.xyz
+    scan_apk.py app.apk --absent Xtreegram --present 94.156.170.106
     scan_apk.py app.apk --absent-file markers.txt --json report.json
 
 Код возврата 1, если хоть один `--absent` найден или хоть один `--present` не
-найден. Отсутствие — это тоже ошибка: если в APK нет `shapitogram.xyz`, значит
+найден. Отсутствие — это тоже ошибка: если в APK нет IP нашего сервера, значит
 туда не попал наш адрес, и клиент никуда не подключится.
+
+Про адрес: проверять надо именно **IP**, а не домен. В `DEFAULT_HOST` уходит
+`APP_SERVER_HOST`, а он обязан быть числовым IPv4 — нативный слой Android зовёт
+`inet_pton` и имён не понимает. Домен в APK не вшивается вообще (он нужен
+только на этапе сборки, для `SERVER_INFO_URL`), поэтому `--present` с доменом
+падал бы всегда.
 """
 
 from __future__ import annotations

@@ -53,8 +53,19 @@ jobs:
       # вовсе (`Unrecognized named-value: 'runner'` на этапе dispatch).
 
       # Наш сервер.
-      CUSTOM_HOST: shapitogram.xyz
-      CUSTOM_PORT: "2398"
+      #
+      # 🔴 APP_SERVER_HOST — ТОЛЬКО числовой IP, домен сюда нельзя.
+      # Нативный слой Android резолвит адрес через inet_pton
+      # (TMessagesProj/jni/tgnet/ConnectionSocket.cpp, ветка прямого
+      # подключения, ~583-590): имена он не понимает и на неудаче сразу
+      # закрывает сокет. Никакого gethostbyname там нет — он есть только в
+      # ветке прокси. С доменом приложение закрывает соединение, переподключается
+      # по кругу и показывает вечную загрузку. Ровно это и случилось в сборке #5.
+      APP_SERVER_HOST: 94.156.170.106
+      APP_SERVER_PORT: "2398"
+      # Домен остаётся для HTTP-эндпоинта server-info (там обычный URL, имя
+      # резолвит Java) и для проверок. В APK он не вшивается.
+      SERVER_DOMAIN: shapitogram.xyz
       SERVER_INFO_URL: "https://shapitogram.xyz/owpengram/server-info"
 
       # Версия. Совпадает с XTree Gram намеренно: это тот же код, и различать
@@ -238,12 +249,21 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euxo pipefail
+          # Адрес обязан быть числовым IP — см. комментарий к APP_SERVER_HOST.
+          # Проверяем до сборки, иначе ошибка всплывёт только на телефоне
+          # в виде вечной загрузки, и искать её придётся в нативном коде.
+          if [[ ! "$APP_SERVER_HOST" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+            echo "APP_SERVER_HOST='$APP_SERVER_HOST' не похож на IPv4." >&2
+            echo "Домен здесь не работает: нативный слой Android резолвит адрес" >&2
+            echo "через inet_pton и имена не понимает (ConnectionSocket.cpp)." >&2
+            exit 1
+          fi
           # Один шаг делает всё: имя пакета, строки во всех локалях, следы XTree Gram
           # в Java, адрес и RSA-ключ сервера, и настройки подписи. В конце он сам
           # ищет остатки XTree Gram в дереве и падает, если что-то нашлось.
           python3 scripts/rebrand_android.py "$BUILD_DIR/TMessagesProj" \
-            --host "$CUSTOM_HOST" \
-            --port "$CUSTOM_PORT" \
+            --host "$APP_SERVER_HOST" \
+            --port "$APP_SERVER_PORT" \
             --rsa-pem "$RUNNER_TEMP/server-rsa-public.pem" \
             --version-code "$APP_VERSION_CODE" \
             --version-name "$APP_VERSION_NAME"
@@ -371,10 +391,14 @@ jobs:
           # Android SDK. Ключ сервера передаём как обязательную подстроку — так
           # проверяется, что в APK попал именно НАШ ключ, а не ключ XTree Gram.
           # Вторая строка PEM — первая строка base64-тела.
+          #
+          # Проверяем наличие APP_SERVER_HOST (IP), а не домена: в APK вшивается
+          # именно он. Домен в бинарь не попадает и попасть не должен.
           KEY_BODY="$(sed -n '2p' "$RUNNER_TEMP/server-rsa-public.pem")"
+          echo "ищу адрес сервера: $APP_SERVER_HOST"
           echo "ищу ключ сервера: ${KEY_BODY:0:24}..."
           python3 tools/scan_apk.py "$APK_PATH" \
-            --present "$CUSTOM_HOST" \
+            --present "$APP_SERVER_HOST" \
             --present "$APP_PACKAGE" \
             --present "$KEY_BODY" \
             --json "$RUNNER_TEMP/apk-branding-report.json"

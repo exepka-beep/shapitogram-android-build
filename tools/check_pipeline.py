@@ -212,11 +212,42 @@ def check_workflow(brand: dict) -> None:
              % job.get("runs-on"))
 
     env = job.get("env") or {}
-    for key in ("UPSTREAM_REF", "CUSTOM_HOST", "CUSTOM_PORT", "SERVER_INFO_URL",
+    for key in ("UPSTREAM_REF", "APP_SERVER_HOST", "APP_SERVER_PORT", "SERVER_DOMAIN",
+                "SERVER_INFO_URL",
                 "APP_VERSION_CODE", "APP_VERSION_NAME", "APP_PACKAGE",
                 "EXPECTED_VERSION_CODE", "EXPECTED_CERT_SHA256", "GRADLE_TASKS"):
         if key not in env:
             fail("workflow: в env job'а нет %s" % key)
+
+    # Адрес сервера обязан быть числовым IPv4.
+    #
+    # Нативный слой Android резолвит адрес через inet_pton
+    # (TMessagesProj/jni/tgnet/ConnectionSocket.cpp, ветка прямого подключения
+    # ~583-590) и на неудаче сразу закрывает сокет; gethostbyname есть только в
+    # ветке прокси. Домен поэтому приводит не к ошибке, а к «вечной загрузке»:
+    # приложение молча переподключается по кругу. Именно это случилось в прогоне
+    # #5, где сюда попал shapitogram.xyz. Проверяем локально, потому что в CI
+    # такое ловится только на телефоне.
+    host = str(env.get("APP_SERVER_HOST", ""))
+    if not re.fullmatch(r"[0-9]{1,3}(\.[0-9]{1,3}){3}", host):
+        fail("workflow: APP_SERVER_HOST=%r не числовой IPv4. Домен здесь нельзя — "
+             "нативный слой Android зовёт inet_pton и имён не понимает, "
+             "приложение уйдёт в вечную загрузку" % host)
+    else:
+        for octet in host.split("."):
+            if int(octet) > 255:
+                fail("workflow: APP_SERVER_HOST=%r — октет %s больше 255" % (host, octet))
+
+    port = str(env.get("APP_SERVER_PORT", ""))
+    if not port.isdigit() or not (1 <= int(port) <= 65535):
+        fail("workflow: APP_SERVER_PORT=%r не похож на номер порта" % port)
+
+    # Старые имена не должны пережить переименование: `CUSTOM_HOST` содержал
+    # домен, и если он где-то остался, шаг ребрендинга снова вшил бы домен.
+    for stale in ("CUSTOM_HOST", "CUSTOM_PORT"):
+        if stale in text:
+            fail("workflow: осталась ссылка на %s — адрес сервера задаётся "
+                 "APP_SERVER_HOST (IPv4), см. комментарий там" % stale)
 
     # versionCode afat = APP_VERSION_CODE * 10 + 9 (abiVersionCode=9 в build.gradle).
     try:
@@ -288,6 +319,26 @@ def check_workflow(brand: dict) -> None:
         if "/work${" not in body and "/work$" not in body:
             fail("workflow: шаг %r передаёт путь к APK без префикса /work — "
                  "внутри контейнера такой файл не найдётся (смонтировано в /work)"
+                 % step.get("name", "?"))
+
+    # Сканер содержимого обязан искать в APK именно IP, а не домен: в бинарь
+    # попадает DEFAULT_HOST, а туда теперь идёт APP_SERVER_HOST. Домен в APK не
+    # вшивается вообще (он живёт только в SERVER_INFO_URL, и тот нужен лишь на
+    # этапе сборки), поэтому `--present "$SERVER_DOMAIN"` упал бы всегда.
+    scan_steps = [s for s in (job.get("steps") or [])
+                  if "scan_apk.py" in (s.get("run") or "")]
+    if not scan_steps:
+        fail("workflow: ни один шаг не запускает tools/scan_apk.py")
+    for step in scan_steps:
+        # Берём сырой текст `run`, а не json.dumps: в дампе кавычки экранированы
+        # (\"), и поиск по '"$APP_SERVER_HOST"' не нашёл бы ничего.
+        body = step.get("run") or ""
+        if '"$APP_SERVER_HOST"' not in body:
+            fail("workflow: шаг %r не проверяет наличие APP_SERVER_HOST в APK — "
+                 "именно этот адрес вшивается в клиент" % step.get("name", "?"))
+        if '"$SERVER_DOMAIN"' in body:
+            fail("workflow: шаг %r требует наличия в APK домена SERVER_DOMAIN, "
+                 "а он туда не вшивается — проверка упала бы всегда"
                  % step.get("name", "?"))
 
     # Зеркало базового образа: без него сборка падает на `429 Too Many Requests`

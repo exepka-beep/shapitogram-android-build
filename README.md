@@ -82,7 +82,7 @@ XTree Gram в дереве — падает, если что-то нашлось
 | `AppName` / `AppNameBeta` | `brand.json` | имя под иконкой, все 10 локалей |
 | текст в `values*/strings.xml` | правила из `brand.json` | **все** локали, включая те, которых нет в overlay |
 | следы XTree Gram в Java | правила из `brand.json` | 66 вхождений в 24 файлах: комментарии и текстовые литералы |
-| `DEFAULT_HOST` / `DEFAULT_PORT` | `CUSTOM_HOST` / `CUSTOM_PORT` | в overlay стоит `2.27.200.203` — адрес сервера XTree Gram |
+| `DEFAULT_HOST` / `DEFAULT_PORT` | `APP_SERVER_HOST` / `APP_SERVER_PORT` | в overlay стоит `2.27.200.203` — адрес сервера XTree Gram. 🔴 `APP_SERVER_HOST` — **только числовой IPv4**: нативный слой зовёт `inet_pton` и имён не понимает (см. ниже) |
 | `OWPENGRAM_RSA_KEY` | `SERVER_INFO_URL` | ключ сервера XTree Gram не подойдёт нашему |
 | `RELEASE_KEY_*` | секреты GitHub | ключ подписи ShapitoGram |
 
@@ -102,6 +102,55 @@ Gram, потом добирается то, что XTree Gram сам не тро
 риска не несут — проверено по overlay: `Xtreegram` в Java ни разу не стоит в
 идентификаторе. Единственные `Xtreegram`-в-идентификаторе — это `APP_PACKAGE` и
 `RELEASE_KEY_*` в `gradle.properties`, и они правятся отдельными регекспами.
+
+## Адрес сервера — только числовой IP
+
+`APP_SERVER_HOST` обязан быть IPv4. Домен там не «просто не рекомендуется», а
+не работает, и отказывает не сразу, а самым неприятным способом.
+
+Нативный слой Android (`TMessagesProj/jni/tgnet/ConnectionSocket.cpp`, ветка
+прямого подключения, ~583-590) переводит строку адреса в бинарный вид через
+`inet_pton`:
+
+```c
+} else {
+    socketAddress.sin_family = AF_INET;
+    socketAddress.sin_port = htons(port);
+    if (inet_pton(AF_INET, address.c_str(), &socketAddress.sin_addr.s_addr) != 1) {
+        if (LOGS_ENABLED) DEBUG_E("connection(%p) bad ipv4 %s", this, address.c_str());
+        closeSocket(1, -1);
+        return;
+    }
+}
+```
+
+`inet_pton` принимает только числовой адрес. `grep -rn getaddrinfo TMessagesProj/jni/`
+даёт **ноль совпадений** — резолва имён в этой ветке нет вообще.
+`gethostbyname` встречается один раз, но в ветке прокси и под
+`USE_DELEGATE_HOST_RESOLVE`.
+
+Что происходит с доменом: сокет закрывается сразу после создания, клиент
+воспринимает это как обрыв и переподключается, и так по кругу. На экране —
+**вечная загрузка**, ни ошибки, ни записи в логе. Искать причину приходится в
+нативном коде, а не в конфиге.
+
+Ровно это и случилось в прогоне #5: в `APP_SERVER_HOST` стоял `shapitogram.xyz`,
+и APK собрался, прошёл все проверки и не работал. XTree Gram поэтому всегда
+шипал IP (`2.27.200.203`).
+
+На iOS то же самое ограничение **не действует**: `MTTcpConnection` отдаёт
+`address.ip` как есть в `GCDAsyncSocket connectToHost:`, а тот зовёт
+`getaddrinfo` (`inet_aton` там только в ветке SOCKS). Поэтому в iOS-конвейере
+seed-адрес — домен, и это нормально.
+
+В воркфлоу адрес защищён двумя барьерами: `check_pipeline.py` падает локально
+(за 5 секунд, а не за 60 минут прогона), а шаг ребрендинга — ещё и в CI, прямо
+перед вызовом `rebrand_android.py`.
+
+Домен при этом никуда не делся: он в `SERVER_DOMAIN` и нужен для
+`SERVER_INFO_URL` (`https://shapitogram.xyz/owpengram/server-info`) — там
+обычный HTTP-клиент на Java, имя резолвится нормально. В APK домен не вшивается,
+поэтому сканер содержимого проверяет наличие **IP**, а не домена.
 
 ## Платежи выключены
 
@@ -173,8 +222,12 @@ Secrets, шифруются на клиенте открытым ключом р
 
 - **нет** `Xtreegram`, `XTree Gram`, `XTREEGRAM`, адреса `2.27.200.203`,
   `XtreegramStore2026`, `xtreegramkey`;
-- **есть** `shapitogram.xyz`, `com.shapitogram.messenger` и **тело нашего
-  RSA-ключа**.
+- **есть** IP нашего сервера (`APP_SERVER_HOST`, сейчас `94.156.170.106`),
+  `com.shapitogram.messenger` и **тело нашего RSA-ключа**.
+
+Проверяется именно IP, а не домен: в клиент вшивается `DEFAULT_HOST`, а туда
+идёт `APP_SERVER_HOST` — числовой IPv4 (см. «Адрес сервера — только числовой
+IP»). Домен в APK не попадает вообще.
 
 Последнее — самая ценная проверка: она ловит случай «собралось, поставилось,
 выглядит правильно, а клиент уходит на сервер XTree Gram», который иначе

@@ -34,7 +34,7 @@ gradle.properties, и они правятся отдельными регекс�
 Запуск
 ------
     python3 rebrand_android.py <путь-к-TMessagesProj> \
-        --host shapitogram.xyz --port 2398 --rsa-pem config/server-rsa-public.pem \
+        --host 94.156.170.106 --port 2398 --rsa-pem config/server-rsa-public.pem \
         --version-code 7042 --version-name 12.10.1 \
         --keystore-alias shapitogramkey --keystore-password ShapitoStore2026
 
@@ -42,6 +42,13 @@ gradle.properties, и они правятся отдельными регекс�
 
 `--host`, `--port` и `--rsa-pem` обязательны: в overlay лежат адрес и ключ
 сервера XTree Gram (`2.27.200.203`), и без замены клиент уйдёт на чужой сервер.
+
+🔴 `--host` принимает **только числовой IPv4**. Нативный слой Android зовёт
+`inet_pton` (ConnectionSocket.cpp, ветка прямого подключения) и имён не
+понимает: на домене сокет закрывается сразу, клиент переподключается по кругу,
+на экране — вечная загрузка без единой ошибки в логе. Проверка стоит здесь,
+чтобы домен не мог попасть в APK даже случайно.
+
 `--rsa-pem` проверяется на формат PEM до подстановки — файл-заглушка здесь
 опаснее отсутствия файла, потому что сборка с ней проходит.
 
@@ -395,7 +402,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("tmessages", help="путь к TMessagesProj")
-    ap.add_argument("--host", default=None, help="DEFAULT_HOST встроенного сервера")
+    ap.add_argument("--host", default=None,
+                    help="DEFAULT_HOST встроенного сервера; только числовой IPv4")
     ap.add_argument("--port", type=int, default=None, help="DEFAULT_PORT")
     ap.add_argument("--rsa-pem", default=None, help="файл с публичным RSA-ключом сервера")
     ap.add_argument("--version-code", default=None, help="APP_VERSION_CODE")
@@ -424,8 +432,18 @@ def main() -> int:
     if args.port is None:
         print("FAIL: нужен --port (в overlay стоит порт XTree Gram)")
         return 1
-    if not re.fullmatch(r"[A-Za-z0-9._-]+", args.host or ""):
-        print("FAIL: --host %r не похож на имя хоста" % args.host)
+    # Только числовой IPv4. Нативный слой Android (ConnectionSocket.cpp, ветка
+    # прямого подключения) зовёт inet_pton и имён не понимает: на домене сокет
+    # закрывается сразу, клиент переподключается по кругу и показывает вечную
+    # загрузку. Ошибка молчаливая, поэтому отказываемся здесь.
+    if not re.fullmatch(r"[0-9]{1,3}(\.[0-9]{1,3}){3}", args.host or ""):
+        print("FAIL: --host %r не числовой IPv4." % args.host)
+        print("      Домен здесь не работает: inet_pton в нативном слое Android "
+              "имена не резолвит (ConnectionSocket.cpp), приложение уйдёт "
+              "в вечную загрузку.")
+        return 1
+    if any(int(octet) > 255 for octet in args.host.split(".")):
+        print("FAIL: --host %r — октет больше 255" % args.host)
         return 1
     if not args.rsa_pem:
         # Без этого в APK остаётся ключ сервера XTree Gram, и клиент не сможет
