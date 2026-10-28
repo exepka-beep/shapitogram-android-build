@@ -13,7 +13,7 @@
 Проверяется
 -----------
   1. на месте ли все файлы конвейера;
-  2. overlay: 205 файлов, платежи отключены, ключ сервера на месте, паролей нет;
+  2. overlay: 206 файлов, платежи отключены, ключ сервера на месте, паролей нет;
   3. brand.json: правила замены, отсутствие пароля, отпечаток ключа;
   4. workflow: YAML разбирается, версия сходится с versionCode, секреты объявлены
      и кем-то ставятся, ссылки на скрипты существуют;
@@ -66,7 +66,9 @@ REQUIRED_SECRETS = {
 }
 OPTIONAL_SECRETS = {"TELEGRAM_API_ID", "TELEGRAM_API_HASH"}
 
-OVERLAY_FILE_COUNT = 205
+# 205 файлов кастомизации XTree Gram + assets/countries.txt, где добавлен
+# диапазон ShapitoGram +1337 (1337;ZZ;ShapitoGram;XXXXX).
+OVERLAY_FILE_COUNT = 206
 XTREE_MARKERS = ("XTree Gram", "Xtreegram", "XTREEGRAM")
 SECRET_STRINGS = ("XtreegramStore", "ShapitoStore", "xtreegramkey")
 

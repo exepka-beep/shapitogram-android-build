@@ -2446,7 +2446,17 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         } else {
                             setCountryButtonText(null);
                             phoneField.setHintText(null);
-                            countryState = COUNTRY_STATE_INVALID;
+                            // A code that is still being typed ("13" on the way to
+                            // "1337") is unfinished, not wrong. Flagging it makes
+                            // the screen flash "wrong country" on every keystroke.
+                            boolean partialCode = false;
+                            for (CountrySelectActivity.Country c : countriesArray) {
+                                if (c.code.startsWith(text) && !c.code.equals(text)) {
+                                    partialCode = true;
+                                    break;
+                                }
+                            }
+                            countryState = partialCode ? COUNTRY_STATE_EMPTY : COUNTRY_STATE_INVALID;
                         }
                         if (!ok) {
                             codeField.setSelection(codeField.getText().length());
@@ -2823,6 +2833,26 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                                     }
                                 }
                             }
+                        }
+
+                        // ShapitoGram's own +1337 numbering plan. 1337 is not a
+                        // calling code, but it starts with "1", so without an
+                        // entry here the code resolves to the USA and the login
+                        // screen reports "wrong country" the moment the user
+                        // types 1337. The server advertises it as country ZZ;
+                        // older server builds and the bundled countries.txt may
+                        // not, so make sure it is present either way.
+                        if (codesMap.get("1337") == null) {
+                            CountrySelectActivity.Country shapitoGram = new CountrySelectActivity.Country();
+                            shapitoGram.name = "ShapitoGram";
+                            shapitoGram.defaultName = "ShapitoGram";
+                            shapitoGram.code = "1337";
+                            shapitoGram.shortname = "ZZ";
+                            countriesArray.add(shapitoGram);
+                            List<CountrySelectActivity.Country> shapitoGramList = new ArrayList<>();
+                            shapitoGramList.add(shapitoGram);
+                            codesMap.put("1337", shapitoGramList);
+                            phoneFormatMap.put("1337", Collections.singletonList("XXXXX"));
                         }
 
                         if (activityMode == MODE_CHANGE_PHONE_NUMBER) {
