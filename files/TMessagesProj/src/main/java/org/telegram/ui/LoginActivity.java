@@ -2798,7 +2798,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     if (error == null) {
                         TLRPC.TL_help_countriesList help_countriesList = (TLRPC.TL_help_countriesList) response;
                         if (help_countriesList.countries.isEmpty()) {
-                            // Self-hosted servers (e.g. OwpenGram) may return an empty
+                            // Self-hosted servers (e.g. ShapitoGram) may return an empty
                             // country list. Keep the bundled countries.txt so phone-code
                             // auto-detection still works instead of forcing the user to
                             // pick a country manually.

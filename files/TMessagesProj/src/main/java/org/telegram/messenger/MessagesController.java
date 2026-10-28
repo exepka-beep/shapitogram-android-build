@@ -503,7 +503,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public boolean enableJoined;
     public String linkPrefix;
-    // OwpenGram: the server's help.getAppConfig advertises owpengram=true. Used to
+    // ShapitoGram: the server's help.getAppConfig advertises owpengram=true. Used to
     // treat links on this account's linkPrefix host as internal owpg links (not the
     // official Telegram network, and not other forks). Mirrors the desktop
     // OwpengramAccountHost gate on appConfig().get<bool>("owpengram").
@@ -2685,7 +2685,7 @@ public class MessagesController extends BaseController implements NotificationCe
             TLRPC.TL_jsonObjectValue value = object.value.get(a);
             switch (value.key) {
                 case "owpengram": {
-                    // OwpenGram self-hosted server marker (true/"true"). See owpengramServer field.
+                    // ShapitoGram self-hosted server marker (true/"true"). See owpengramServer field.
                     sawOwpengram = true;
                     boolean val = (value.value instanceof TLRPC.TL_jsonBool && ((TLRPC.TL_jsonBool) value.value).value)
                             || (value.value instanceof TLRPC.TL_jsonString && "true".equalsIgnoreCase(((TLRPC.TL_jsonString) value.value).value));
@@ -5046,7 +5046,7 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
 
-        // Clear the OwpenGram marker if the server stopped advertising it.
+        // Clear the ShapitoGram marker if the server stopped advertising it.
         if (!sawOwpengram && owpengramServer) {
             owpengramServer = false;
             editor.putBoolean("owpengramServer", false);

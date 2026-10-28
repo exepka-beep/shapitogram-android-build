@@ -156,7 +156,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
 
     @Override
     public View createView(Context context) {
-        // Page 1 title is plain text again; the OwpenGram logo is shown as the big
+        // Page 1 title is plain text again; the ShapitoGram logo is shown as the big
         // intro image (introLogoView) instead of the Telegram GL animation.
         titles[0] = LocaleController.getString(R.string.Page1Title);
 
@@ -251,17 +251,19 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         TextureView textureView = new TextureView(context);
         introTextureView = textureView;
         // Hide the GL surface (and its round logo plate) on page 0, so only the
-        // OwpenGram hexagon logo shows there with no round background behind it.
+        // ShapitoGram hexagon logo shows there with no round background behind it.
         // It fades in as the user swipes to the feature pages (which keep it).
         textureView.setAlpha(0f);
         frameLayout2.addView(textureView, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
 
-        // Big OwpenGram logo shown on the first intro page (page 0). The Telegram GL
+        // Big ShapitoGram logo shown on the first intro page (page 0). The Telegram GL
         // logo is made transparent (see EGLThread.initGL), so this is the only logo
         // visible there. It fades out as the user swipes to the feature pages.
+        // The artwork is the stock Telegram mark (blue circle + white plane), shared
+        // with the Android 12+ splash icon so both screens show the same logo.
         introLogoView = new ImageView(context);
         introLogoView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        introLogoView.setImageResource(R.drawable.server_owpengram);
+        introLogoView.setImageResource(R.drawable.splash_shapitogram);
         frameLayout2.addView(introLogoView, LayoutHelper.createFrame(ICON_HEIGHT_DP, ICON_HEIGHT_DP, Gravity.CENTER));
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
@@ -822,7 +824,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             loadTexture(R.drawable.intro_private_door, 19);
             loadTexture(R.drawable.intro_private_screw, 20);
             // Telegram logo (plane + sphere) is rendered transparent: the big intro
-            // logo on page 0 is the OwpenGram image (introLogoView) overlaid instead.
+            // logo on page 0 is the ShapitoGram image (introLogoView) overlaid instead.
             loadTexture(v -> Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888), 21);
             loadTexture(v -> Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888), 22);
             loadTexture(telegramMaskProvider, 23);

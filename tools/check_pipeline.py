@@ -13,7 +13,7 @@
 Проверяется
 -----------
   1. на месте ли все файлы конвейера;
-  2. overlay: 206 файлов, платежи отключены, ключ сервера на месте, паролей нет;
+  2. overlay: 209 файлов, платежи отключены, ключ сервера на месте, паролей нет;
   3. brand.json: правила замены, отсутствие пароля, отпечаток ключа;
   4. workflow: YAML разбирается, версия сходится с versionCode, секреты объявлены
      и кем-то ставятся, ссылки на скрипты существуют;
@@ -68,7 +68,7 @@ OPTIONAL_SECRETS = {"TELEGRAM_API_ID", "TELEGRAM_API_HASH"}
 
 # 205 файлов кастомизации XTree Gram + assets/countries.txt, где добавлен
 # диапазон ShapitoGram +1337 (1337;ZZ;ShapitoGram;XXXXX).
-OVERLAY_FILE_COUNT = 206
+OVERLAY_FILE_COUNT = 209
 XTREE_MARKERS = ("XTree Gram", "Xtreegram", "XTREEGRAM")
 SECRET_STRINGS = ("XtreegramStore", "ShapitoStore", "xtreegramkey")
 
@@ -123,6 +123,47 @@ def check_overlay() -> None:
         if 'DEFAULT_HOST = "2.27.200.203"' not in text:
             fail("overlay: в OwpengramServers.java ожидался адрес XTree Gram "
                  "(2.27.200.203) — если он уже переписан, overlay собран не с чистого дерева")
+
+    # Launch screen must show the stock Telegram logo, not the OwpenGram hexagon.
+    splash = files_dir / "TMessagesProj/src/main/res/drawable/splash_shapitogram.xml"
+    if not splash.is_file():
+        fail("overlay: нет drawable/splash_shapitogram.xml — на запуске останется "
+             "логотип OwpenGram")
+    elif "#2AABEE" not in read(splash).upper():
+        fail("overlay: splash_shapitogram.xml не похож на синий круг Telegram")
+
+    for rel in ("TMessagesProj/src/main/res/values-night/styles.xml",
+                "TMessagesProj/src/main/res/values-v31/styles.xml"):
+        style = files_dir / rel
+        if not style.is_file():
+            fail("overlay: нет %s" % rel)
+            continue
+        text = read(style)
+        if "@drawable/splash_shapitogram" not in text:
+            fail("overlay: %s не ссылается на splash_shapitogram — "
+                 "на запуске будет старый логотип" % rel)
+        if "@drawable/splash_owpengram" in text:
+            fail("overlay: %s всё ещё ссылается на splash_owpengram" % rel)
+
+    # OwpenGram не должно остаться ни в одном Java-файле overlay: строки бренда
+    # живут в strings.xml (их переписывает шаг ребрендинга), а в Java оставались
+    # только имена папок медиа, версия в настройках и логотип онбординга.
+    # Регистр важен: 'OwpengramServers', 'owpengramServer', 'OWPENGRAM_RSA_KEY',
+    # 'org.telegram.owpengram' и 'server_owpengram' — рабочие идентификаторы,
+    # они не содержат 'OwpenGram' с большой G и под замену не попадают.
+    stale = []
+    for path in (files_dir / "TMessagesProj/src/main/java").rglob("*.java"):
+        if "OwpenGram" in read(path):
+            stale.append(str(path.relative_to(files_dir)))
+    if stale:
+        fail("overlay: 'OwpenGram' остался в %d файлах (%s)"
+             % (len(stale), ", ".join(stale[:3])))
+
+    intro = files_dir / ("TMessagesProj/src/main/java/org/telegram/ui/"
+                         "IntroActivity.java")
+    if intro.is_file() and "R.drawable.splash_shapitogram" not in read(intro):
+        fail("overlay: IntroActivity рисует логотип онбординга не из "
+             "splash_shapitogram — на первом экране останется шестиугольник")
 
     gradle = files_dir / "gradle.properties"
     if not gradle.is_file():

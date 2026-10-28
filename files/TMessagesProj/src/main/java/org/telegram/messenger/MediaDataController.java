@@ -784,7 +784,7 @@ public class MediaDataController extends BaseController {
                     processLoadedReactions(null, 0, date, false);
                 } else if (response instanceof TLRPC.TL_messages_availableReactions) {
                     TLRPC.TL_messages_availableReactions r = (TLRPC.TL_messages_availableReactions) response;
-                    // Xtreegram: сервер отдаёт ПУСТОЙ каталог без ошибки — telesrv сидит реакции
+                    // Xtreegram: сервер отдаёт ПУСТОЙ каталог без ошибки — ShapitoGram сидит реакции
                     // только при заданном TELESRV_STICKER_SEED_DIR, иначе available_reactions пуст.
                     // Пустой список = чузер реакций вообще не показывается, поэтому засеваем дефолт.
                     if (r.reactions == null || r.reactions.isEmpty()) {
@@ -837,7 +837,7 @@ public class MediaDataController extends BaseController {
         }
     }
 
-    // Xtreegram: telesrv отдаёт каталог реакций из таблицы available_reactions, а она наполняется
+    // Xtreegram: ShapitoGram отдаёт каталог реакций из таблицы available_reactions, а она наполняется
     // только при заданном TELESRV_STICKER_SEED_DIR. На нашем сервере он не настроен, поэтому
     // messages.getAvailableReactions приходит УСПЕШНО, но с пустым списком — и чузер реакций
     // не показывается вовсе (ChatActivity.createMenu гейтит его на !availableReacts.isEmpty()).

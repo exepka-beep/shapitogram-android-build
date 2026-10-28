@@ -60,7 +60,7 @@ public class OwpengramServers {
     private static final String DEFAULT_HOST = "2.27.200.203";
     private static final int    DEFAULT_PORT = 2398;
 
-    // OwpenGram's own production server RSA key.
+    // ShapitoGram's own production server RSA key.
     static final String OWPENGRAM_RSA_KEY =
         "-----BEGIN RSA PUBLIC KEY-----\n" +
         "MIIBCgKCAQEAxF//0M0+/5PzgdNagTX+J+dJgr75ZCTuiG8i4x7YwmJF+jiOGCjm\n" +
@@ -268,13 +268,13 @@ public class OwpengramServers {
     /**
      * Whether the account's current server exposes Telegram Premium / Stars /
      * Business features. Telegram always does. Any other (custom
-     * self-hosted, e.g. gramsrv) server is trusted based on its own appConfig
+     * self-hosted, e.g. ShapitoGram) server is trusted based on its own appConfig
      * contract — help.getAppConfig `premium_purchase_blocked` / `stars_purchase_blocked`
      * (MessagesController.premiumLocked / starsLocked, refreshed on every appConfig
      * fetch) — the same signal the desktop client relies on via session->premiumPossible(),
      * which has no separate per-server allowlist. A server that doesn't implement these
      * features server-side is expected to send the blocked flags (as the old
-     * owpengram-server did); one that does (gramsrv) is not unconditionally hidden here
+     * owpengram-server did); one that does (ShapitoGram) is not unconditionally hidden here
      * just for not being a hardcoded preset.
      */
     public static boolean serverSupportsPremium(int accountNum) {
@@ -292,7 +292,7 @@ public class OwpengramServers {
     /**
      * Whether the account's current server is the official Telegram network.
      * Used to hide Telegram-specific help entries (Ask a Question, Telegram FAQ /
-     * Features, Privacy Policy) on OwpenGram and other servers, where they don't apply.
+     * Features, Privacy Policy) on ShapitoGram and other servers, where they don't apply.
      */
     public static boolean serverIsOfficialTelegram(int accountNum) {
         OwpengramServer s = getServerForAccount(accountNum);
@@ -692,7 +692,7 @@ public class OwpengramServers {
      * handshake is verified against; a wrong name or icon is merely wrong,
      * not dangerous.
      *
-     * The Telegram server is skipped -- it is not an OwpenGram backend and
+     * The Telegram server is skipped -- it is not an ShapitoGram backend and
      * has no such endpoint. Fire-and-forget: one round at a time, and any
      * failure silently keeps the stored values.
      */
