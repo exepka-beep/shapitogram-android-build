@@ -13,7 +13,7 @@
 Проверяется
 -----------
   1. на месте ли все файлы конвейера;
-  2. overlay: 209 файлов, платежи отключены, ключ сервера на месте, паролей нет;
+  2. overlay: 210 файлов, платежи отключены, ключ сервера на месте, паролей нет;
   3. brand.json: правила замены, отсутствие пароля, отпечаток ключа;
   4. workflow: YAML разбирается, версия сходится с versionCode, секреты объявлены
      и кем-то ставятся, ссылки на скрипты существуют;
@@ -68,7 +68,7 @@ OPTIONAL_SECRETS = {"TELEGRAM_API_ID", "TELEGRAM_API_HASH"}
 
 # 205 файлов кастомизации XTree Gram + assets/countries.txt, где добавлен
 # диапазон ShapitoGram +1337 (1337;ZZ;ShapitoGram;XXXXX).
-OVERLAY_FILE_COUNT = 209
+OVERLAY_FILE_COUNT = 210
 XTREE_MARKERS = ("XTree Gram", "Xtreegram", "XTREEGRAM")
 SECRET_STRINGS = ("XtreegramStore", "ShapitoStore", "xtreegramkey")
 
@@ -164,6 +164,18 @@ def check_overlay() -> None:
     if intro.is_file() and "R.drawable.splash_shapitogram" not in read(intro):
         fail("overlay: IntroActivity рисует логотип онбординга не из "
              "splash_shapitogram — на первом экране останется шестиугольник")
+
+    # Форматирование номера в профиле идёт не через countries.txt, а через
+    # бинарную базу PhoneFormats.dat, где "1337" попадает под правило США
+    # ("1" — код США) и превращает +133769014 в "+1 (337) 690-14".
+    phone_format = files_dir / ("TMessagesProj/src/main/java/org/telegram/"
+                                "PhoneFormat/PhoneFormat.java")
+    if not phone_format.is_file():
+        fail("overlay: нет PhoneFormat.java — номер +1337 будет показан как "
+             "американский (+1 (337) …)")
+    elif read(phone_format).count('startsWith("+1337")') < 2:
+        fail("overlay: в PhoneFormat.java нет обоих обходов для +1337 "
+             "(format и isPhoneNumberValid)")
 
     gradle = files_dir / "gradle.properties"
     if not gradle.is_file():

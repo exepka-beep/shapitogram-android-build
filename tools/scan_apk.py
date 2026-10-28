@@ -30,6 +30,9 @@ APK — это zip, содержимое не сжато «в никуда»: с
     scan_apk.py app.apk --absent Xtreegram --present 94.156.170.106
     scan_apk.py app.apk --absent-file markers.txt --json report.json
 
+    # логотип на запуске: имя ресурса обязано быть, логотипа OwpenGram — нет
+    scan_apk.py app.apk --present splash_shapitogram
+
 Код возврата 1, если хоть один `--absent` найден или хоть один `--present` не
 найден. Отсутствие — это тоже ошибка: если в APK нет IP нашего сервера, значит
 туда не попал наш адрес, и клиент никуда не подключится.
@@ -55,6 +58,10 @@ DEFAULT_ABSENT = (
     "Xtreegram",
     "XTree Gram",
     "XTREEGRAM",
+    # Логотип и тексты OwpenGram. Регистр важен: строчные 'owpengramServer',
+    # 'org.telegram.owpengram' и ключ appConfig "owpengram" — рабочие
+    # идентификаторы, они обязаны остаться и под эту проверку не попадают.
+    "OwpenGram",
     "2.27.200.203",
     "XtreegramStore2026",
     "xtreegramkey",
