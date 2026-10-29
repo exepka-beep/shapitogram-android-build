@@ -1,4 +1,4 @@
-name: Build ShapitoGram APK
+﻿name: Build ShapitoGram APK
 
 # Собирает подписанный release-APK ShapitoGram из форка owpengram-android-client.
 #
@@ -61,21 +61,21 @@ jobs:
       # закрывает сокет. Никакого gethostbyname там нет — он есть только в
       # ветке прокси. С доменом приложение закрывает соединение, переподключается
       # по кругу и показывает вечную загрузку. Ровно это и случилось в сборке #5.
-      APP_SERVER_HOST: 94.156.170.106
+      APP_SERVER_HOST: 201.58.184.118
       APP_SERVER_PORT: "2398"
       # Домен остаётся для HTTP-эндпоинта server-info (там обычный URL, имя
       # резолвит Java) и для проверок. В APK он не вшивается.
       SERVER_DOMAIN: shapitogram.xyz
-      SERVER_INFO_URL: "https://shapitogram.xyz/owpengram/server-info"
+      SERVER_INFO_URL: "http://201.58.184.118:2398/owpengram/server-info"
 
       # Версия. Совпадает с XTree Gram намеренно: это тот же код, и различать
       # сборки по номеру версии смысла нет — их различает applicationId.
-      APP_VERSION_CODE: "7042"
+      APP_VERSION_CODE: "7043"
       APP_VERSION_NAME: "12.10.1"
       APP_PACKAGE: com.shapitogram.messenger
       APP_LABEL: ShapitoGram
       # versionCode afat = APP_VERSION_CODE * 10 + 9 (см. TMessagesProj_App/build.gradle).
-      EXPECTED_VERSION_CODE: "70429"
+      EXPECTED_VERSION_CODE: "70439"
 
       # Отпечаток сертификата ключа подписи ShapitoGram. Если APK подписан не им,
       # обновление поверх установленного приложения не встанет — лучше упасть здесь.
@@ -224,9 +224,18 @@ jobs:
           # Сервер стартует с TELESRV_RSA_IDENTITY_MODE=generated и создаёт ключ
           # сам при первом запуске, поэтому в репозитории его быть не может.
           # В overlay лежит ключ сервера XTree Gram — шаг ребрендинга его заменит.
-          python3 scripts/fetch_server_key.py \
-            --url "$SERVER_INFO_URL" \
-            --out "$RUNNER_TEMP/server-rsa-public.pem"
+          #
+          # Сборка без домена: /owpengram/server-info отвечает только у сборок
+          # gramsrv с этим обработчиком, а на VPS стоит более старая — эндпоинт
+          # отдаёт 404. Тогда берём ключ, зафиксированный в files/, и громко
+          # предупреждаем: он верен только если сервер не перегенерировал пару.
+          if ! python3 scripts/fetch_server_key.py \
+                 --url "$SERVER_INFO_URL" \
+                 --out "$RUNNER_TEMP/server-rsa-public.pem"; then
+            echo "::warning::server-info недоступен ($SERVER_INFO_URL) — использую files/server-rsa-public.pem"
+            cp files/server-rsa-public.pem "$RUNNER_TEMP/server-rsa-public.pem"
+          fi
+          head -n 2 "$RUNNER_TEMP/server-rsa-public.pem"
 
       - name: Install the signing keystore
         env:
